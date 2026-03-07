@@ -7,11 +7,7 @@ import random
 import string
 
 def main():
-
-    #add resize/compression/quality option
-    #preserve metadata
-    #concurrent.futures for faster conversion??
-
+    
     parser = argparse.ArgumentParser(
                         prog="img-convert",
                         description="Converts either an image or an entire directory of images from one format to another.")
