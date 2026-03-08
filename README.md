@@ -17,7 +17,8 @@ A high-performance, multi-threaded image conversion tool built with Python and P
 ### Batch convert a directory
 ```bash
 python img-convert.py batch <input_directory> <output_format>
-
+```
 ### Single file conversion
 ```bash
 python img-convert.py file <input_file> <output_file>
+```
