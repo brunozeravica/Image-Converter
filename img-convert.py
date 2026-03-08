@@ -59,10 +59,10 @@ def convert_image(input_file: Path, output_file: Path):
         with Image.open(input_file) as img:
             # Check if the output file format can save an image in the color mode of the input image
             if not file_format_mode_check(output_file_format, img.mode):
-                    for mode in ("RGBA", "RGB", "L"):
-                        if file_format_mode_check(output_file_format, mode):
-                            img = img.convert(mode)
-                            break
+                for mode in ("RGBA", "RGB", "L"):
+                    if file_format_mode_check(output_file_format, mode):
+                        img = img.convert(mode)
+                        break
 
             if output_file_format not in Image.SAVE.keys():
                 print(f"Unsupported file format: {output_file_format}")
