@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import argparse
 import io
-import random
+import secrets
 import string
 from concurrent.futures import ProcessPoolExecutor
 import time
@@ -49,19 +49,20 @@ def convert_image(input_file: Path, output_file: Path):
     except Exception as e:
         sys.exit(f"Invalid path, Error: {e}")
 
+    if not output_file.suffix:
+        sys.exit("Invalid file name")
+
     # Get the extension of the output file
     output_file_format = output_file.suffix.upper().replace(".", "")
     if output_file_format == "JPG": output_file_format = "JPEG"
-
     try:
         with Image.open(input_file) as img:
             # Check if the output file format can save an image in the color mode of the input image
             if not file_format_mode_check(output_file_format, img.mode):
-                if file_format_mode_check(output_file_format, "RGBA"):
-                    img = img.convert("RGBA")
-
-                else:
-                    img = img.convert("RGB")
+                    for mode in ("RGBA", "RGB", "L"):
+                        if file_format_mode_check(output_file_format, mode):
+                            img = img.convert(mode)
+                            break
 
             if output_file_format not in Image.SAVE.keys():
                 print(f"Unsupported file format: {output_file_format}")
@@ -97,7 +98,8 @@ def convert_batch(args):
 
     # Generating a random directory name so as not to overwrite an existing one
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_dir = str(input_dir.name) + "_converted_" + timestamp
+    suffix = secrets.token_hex(2)
+    output_dir = f"{input_dir.name}_converted_{timestamp}_{suffix}"
     output_path = input_dir / output_dir
     try:
         output_path.mkdir(parents=True, exist_ok=False)
@@ -105,7 +107,7 @@ def convert_batch(args):
     except Exception as e:
         sys.exit(f"Error: {e}")
 
-    supported_exts = Image.registered_extensions()
+    supported_exts = set(Image.registered_extensions().keys())
     files_to_convert = [
     f for f in input_dir.iterdir()
     if f.is_file() and f.suffix.lower() in supported_exts
