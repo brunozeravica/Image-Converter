@@ -10,9 +10,6 @@ import time
 
 def main():
 
-    #add resize/compression/quality option
-    #preserve metadata
-
     parser = argparse.ArgumentParser(
                         prog="img-convert",
                         description="Converts images from one format to another.")
