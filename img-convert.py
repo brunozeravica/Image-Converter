@@ -5,51 +5,41 @@ import argparse
 import io
 import random
 import string
+from concurrent.futures import ProcessPoolExecutor
+import time
 
 def main():
-    
+
+    #add resize/compression/quality option
+    #preserve metadata
+
     parser = argparse.ArgumentParser(
                         prog="img-convert",
-                        description="Converts either an image or an entire directory of images from one format to another.")
+                        description="Converts images from one format to another.")
 
-    parser.add_argument("-b", "--batch", action="store_true", help="Batch convert")
-    parser.add_argument("vars", nargs="*", help="Files/directories for conversion")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    file_cmd = sub.add_parser("file", aliases=["F"],help="Convert a single file")
+    file_cmd.add_argument("input")
+    file_cmd.add_argument("output")
+
+    file_cmd.set_defaults(func=convert_single)
+
+    batch_cmd = sub.add_parser("batch", aliases=["B"], help="Batch convert an entire directory")
+    batch_cmd.add_argument("input_directory")
+    batch_cmd.add_argument("output_format")
+
+    batch_cmd.set_defaults(func=convert_batch)
 
     args = parser.parse_args()
 
+    args.func(args)
 
-    if args.batch:
-        if len(args.vars) != 2:
-            sys.exit("Error: --batch(-b) requires exactly 2 arguments, an input directory and an output file format")
 
-        output_file_format = args.vars[1].upper().strip().replace(".", "")
-        input_dir = Path(args.vars[0])
+def parallel(pair):
 
-        if not input_dir.is_dir():
-            sys.exit(f"Batch mode requires a directory as input, got: {args.vars[0]}")
-
-        # Generating a random directory name so as not to overwrite an existing one
-        while True:
-            random_name = "".join(random.choices(string.ascii_letters, k=6)) + "_converted"
-            output_dir = input_dir / random_name
-            if not output_dir.exists():
-                break
-
-        output_dir.mkdir(parents=True)
-
-        supported_exts = Image.registered_extensions()
-        for file in input_dir.iterdir():
-            if file.is_file() and file.suffix.lower() in supported_exts:
-                output_file = Path(output_dir / (file.stem + "." + output_file_format))
-                convert_image(file, output_file)
-
-    else:
-        if len(args.vars) != 2:
-            sys.exit("Error: file conversion requires exactly 2 arguments, an input file and an output file")
-
-        convert_image(args.vars[0], args.vars[1])
-
-    return
+    input_file, output_file = pair
+    return convert_image(input_file, output_file)
 
 
 def convert_image(input_file: Path, output_file: Path):
@@ -86,7 +76,55 @@ def convert_image(input_file: Path, output_file: Path):
         return
 
     print(f"Successfully converted {input_file} to {output_file}")
-    return
+
+
+def convert_single(args):
+
+    input_path = Path(args.input).resolve()
+    input_dir = input_path.parent
+    output_path = input_dir / args.output
+
+    convert_image(input_path, output_path)
+
+
+def convert_batch(args):
+
+    start_time = time.time()
+
+    output_file_format = args.output_format.upper().strip().replace(".", "")
+    input_dir = Path(args.input_directory).resolve()
+
+    if not input_dir.is_dir():
+        sys.exit(f"Batch mode requires a directory as input, got: {args.input_directory}")
+
+    # Generating a random directory name so as not to overwrite an existing one
+    while True:
+        random_name = "".join(random.choices(string.ascii_letters, k=6)) + "_converted"
+        output_dir = input_dir / random_name
+        try:
+            output_dir.mkdir(parents=True, exist_ok=False)
+            break
+
+        except FileExistsError:
+            continue
+
+    supported_exts = Image.registered_extensions()
+    files_to_convert = [
+    f for f in input_dir.iterdir()
+    if f.is_file() and f.suffix.lower() in supported_exts
+    ]
+
+    tasks = []
+    for file in files_to_convert:
+        output_file = output_dir / (file.stem + "." + output_file_format)
+        tasks.append((file, output_file))
+
+    with ProcessPoolExecutor() as executor:
+        list(executor.map(parallel, tasks))
+
+    end_time = time.time()
+    print(f"Time taken: {end_time - start_time:.2f}")
+
 
 def file_format_mode_check(file_format, required_mode):
 
