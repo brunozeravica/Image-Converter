@@ -7,6 +7,7 @@ import random
 import string
 from concurrent.futures import ProcessPoolExecutor
 import time
+from datetime import datetime
 
 def main():
 
@@ -95,15 +96,14 @@ def convert_batch(args):
         sys.exit(f"Batch mode requires a directory as input, got: {args.input_directory}")
 
     # Generating a random directory name so as not to overwrite an existing one
-    while True:
-        random_name = "".join(random.choices(string.ascii_letters, k=6)) + "_converted"
-        output_dir = input_dir / random_name
-        try:
-            output_dir.mkdir(parents=True, exist_ok=False)
-            break
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_dir = str(input_dir.name) + "_converted_" + timestamp
+    output_path = input_dir / output_dir
+    try:
+        output_path.mkdir(parents=True, exist_ok=False)
 
-        except FileExistsError:
-            continue
+    except Exception as e:
+        sys.exit(f"Error: {e}")
 
     supported_exts = Image.registered_extensions()
     files_to_convert = [
@@ -113,7 +113,7 @@ def convert_batch(args):
 
     tasks = []
     for file in files_to_convert:
-        output_file = output_dir / (file.stem + "." + output_file_format)
+        output_file = output_path / (file.stem + "." + output_file_format)
         tasks.append((file, output_file))
 
     with ProcessPoolExecutor() as executor:
