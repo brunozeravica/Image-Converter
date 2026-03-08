@@ -7,6 +7,7 @@ A high-performance, multi-threaded image conversion tool built with Python and P
 * **Parallel Processing:** Uses `ProcessPoolExecutor` to utilize all CPU cores for faster throughput.
 * **Intelligent Color Conversion:** Automatically detects and converts color modes (e.g., RGBA to RGB) to ensure compatibility with the target format.
 * **Path Safety:** Built using `pathlib` for robust cross-platform path handling.
+* **Preserving EXIF Data:** EXIF data can be preserved accross conversions with the `--copyexif` or `-c` flag
 
 ## Requirements
 * Python 3.x
