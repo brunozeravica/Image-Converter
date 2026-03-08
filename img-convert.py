@@ -3,19 +3,20 @@ import sys
 from pathlib import Path
 import argparse
 import io
-import random
+import secrets
 import string
 from concurrent.futures import ProcessPoolExecutor
 import time
+from datetime import datetime
 
 def main():
-
-    #add resize/compression/quality option
-    #preserve metadata
 
     parser = argparse.ArgumentParser(
                         prog="img-convert",
                         description="Converts images from one format to another.")
+
+    parser.add_argument("--copyexif", "-c", action="store_true", help="Converted images retain the original EXIF data (metadata)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -36,13 +37,7 @@ def main():
     args.func(args)
 
 
-def parallel(pair):
-
-    input_file, output_file = pair
-    return convert_image(input_file, output_file)
-
-
-def convert_image(input_file: Path, output_file: Path):
+def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool):
 
     try:
         input_file = Path(input_file)
@@ -51,31 +46,40 @@ def convert_image(input_file: Path, output_file: Path):
     except Exception as e:
         sys.exit(f"Invalid path, Error: {e}")
 
+    if not output_file.suffix:
+        print("Invalid file name")
+        return
+
+    exif_data = None
     # Get the extension of the output file
     output_file_format = output_file.suffix.upper().replace(".", "")
     if output_file_format == "JPG": output_file_format = "JPEG"
-
     try:
         with Image.open(input_file) as img:
+            if exif:
+                exif_data = img.getexif()
+
             # Check if the output file format can save an image in the color mode of the input image
             if not file_format_mode_check(output_file_format, img.mode):
-                if file_format_mode_check(output_file_format, "RGBA"):
-                    img = img.convert("RGBA")
-
-                else:
-                    img = img.convert("RGB")
+                for mode in ("RGBA", "RGB", "L"):
+                    if file_format_mode_check(output_file_format, mode):
+                        img = img.convert(mode)
+                        print(f"Forced to convert {input_file.name} to color format {mode}")
+                        break
 
             if output_file_format not in Image.SAVE.keys():
                 print(f"Unsupported file format: {output_file_format}")
                 return
 
-            img.save(output_file)
+            img.save(output_file, exif=exif_data)
 
     except Exception as e:
-        print(f"Skipping {input_file}: {e}")
+        if verbose:
+            print(f"Skipping {input_file}: {e}")
         return
 
-    print(f"Successfully converted {input_file} to {output_file}")
+    if verbose:
+        print(f"Successfully converted {input_file} to {output_file}")
 
 
 def convert_single(args):
@@ -84,7 +88,7 @@ def convert_single(args):
     input_dir = input_path.parent
     output_path = input_dir / args.output
 
-    convert_image(input_path, output_path)
+    convert_image(input_path, output_path, args.verbose, args.copyexif)
 
 
 def convert_batch(args):
@@ -98,32 +102,36 @@ def convert_batch(args):
         sys.exit(f"Batch mode requires a directory as input, got: {args.input_directory}")
 
     # Generating a random directory name so as not to overwrite an existing one
-    while True:
-        random_name = "".join(random.choices(string.ascii_letters, k=6)) + "_converted"
-        output_dir = input_dir / random_name
-        try:
-            output_dir.mkdir(parents=True, exist_ok=False)
-            break
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    suffix = secrets.token_hex(2)
+    output_dir = f"{input_dir.name}_converted_{timestamp}_{suffix}"
+    output_path = input_dir / output_dir
+    try:
+        output_path.mkdir(parents=True, exist_ok=False)
 
-        except FileExistsError:
-            continue
+    except Exception as e:
+        sys.exit(f"Error: {e}")
 
-    supported_exts = Image.registered_extensions()
-    files_to_convert = [
-    f for f in input_dir.iterdir()
-    if f.is_file() and f.suffix.lower() in supported_exts
-    ]
+    supported_exts = set(Image.registered_extensions().keys())
+    files_to_convert = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in supported_exts]
 
     tasks = []
     for file in files_to_convert:
-        output_file = output_dir / (file.stem + "." + output_file_format)
-        tasks.append((file, output_file))
+        output_file = output_path / (file.stem + "." + output_file_format)
+        tasks.append((file, output_file, args.verbose, args.copyexif))
 
     with ProcessPoolExecutor() as executor:
         list(executor.map(parallel, tasks))
 
     end_time = time.time()
-    print(f"Time taken: {end_time - start_time:.2f}")
+    if args.verbose:
+        print(f"Time taken: {end_time - start_time:.2f}")
+
+
+def parallel(args_tuple):
+
+    input_file, output_file, verbose, exif = args_tuple
+    return convert_image(input_file, output_file, verbose, exif)
 
 
 def file_format_mode_check(file_format, required_mode):
