@@ -1,14 +1,22 @@
-from PIL import Image
+from PIL import Image, ImageOps
 import sys
 from pathlib import Path
 import argparse
 import io
 import secrets
-import string
 from concurrent.futures import ProcessPoolExecutor
 import time
 from datetime import datetime
 import re
+from tqdm import tqdm
+
+def add_resize_args(p):
+        p.add_argument(
+            "-r", "--resize",
+            nargs=2,
+            metavar=('MODE', 'SIZE'),
+            help="Resize mode (contain, cover, fit, force) and dimensions (e.g. --resize fit 600x900)"
+        )
 
 def main():
 
@@ -16,19 +24,20 @@ def main():
                         prog="img-convert",
                         description="Converts images from one format to another.")
 
-    parser.add_argument("--copyexif", "-c", action="store_true", help="Converted images retain the original EXIF data (metadata)")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
-    parser.add_argument("--size", "-s", type=size_regex, help="Change the size of the output image (width, height)")
+    parser.add_argument( "-c", "--copyexif", action="store_true", help="Converted images retain the original EXIF data (metadata)")
+    parser.add_argument( "-v", "--verbose", action="store_true", help="Enables verbose output")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    file_cmd = sub.add_parser("file", aliases=["F", "f"],help="Convert a single file")
+    file_cmd = sub.add_parser("file", aliases=["F", "f"],help="Convert a single file (supports -r/--resize)")
+    add_resize_args(file_cmd)
     file_cmd.add_argument("input")
     file_cmd.add_argument("output")
 
     file_cmd.set_defaults(func=convert_single)
 
-    batch_cmd = sub.add_parser("batch", aliases=["B", "b"], help="Batch convert an entire directory")
+    batch_cmd = sub.add_parser("batch", aliases=["B", "b"], help="Batch convert an entire directory (supports -r/--resize)")
+    add_resize_args(batch_cmd)
     batch_cmd.add_argument("input_directory")
     batch_cmd.add_argument("output_format")
 
@@ -44,7 +53,7 @@ def main():
     args.func(args)
 
 
-def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool, size: tuple):
+def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool, size: tuple, mode: str):
 
     try:
         input_file = Path(input_file)
@@ -67,18 +76,29 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
                 exif_data = img.getexif()
             # Check if the output file format can save an image in the color mode of the input image
             if not file_format_mode_check(output_file_format, img.mode):
-                for mode in ("RGBA", "RGB", "L"):
-                    if file_format_mode_check(output_file_format, mode):
-                        img = img.convert(mode)
-                        print(f"Forced to convert {input_file.name} to color format {mode}")
+                for color_mode in ("RGBA", "RGB", "L"):
+                    if file_format_mode_check(output_file_format, color_mode):
+                        img = img.convert(color_mode)
+                        print(f"Forced to convert {input_file.name} to color format {color_mode}")
                         break
 
             if output_file_format not in Image.SAVE.keys():
                 print(f"Unsupported file format: {output_file_format}")
                 return
 
+
             if size:
-                img = img.resize(size)
+                match mode:
+                    case "contain":
+                        img = ImageOps.contain(img, size)
+                    case "cover":
+                        img = ImageOps.cover(img, size)
+                    case "fit":
+                        img = ImageOps.fit(img, size)
+                    case "force":
+                        img = img.resize(size)
+                    case _:
+                        print(f"Warning: Unknown resize mode '{mode}'. Skipping resize.")
 
             if exif:
                 img.save(output_file, exif=exif_data)
@@ -101,7 +121,14 @@ def convert_single(args):
     input_dir = input_path.parent
     output_path = input_dir / args.output
 
-    convert_image(input_path, output_path, args.verbose, args.copyexif, args.size)
+    mode = None
+    size = None
+
+    if args.resize:
+        mode, size = args.resize
+        size = size_regex(size)
+
+    convert_image(input_path, output_path, args.verbose, args.copyexif, size, mode)
 
 
 def convert_batch(args):
@@ -125,16 +152,28 @@ def convert_batch(args):
     except Exception as e:
         sys.exit(f"Error: {e}")
 
+    mode = None
+    size = None
+
+    if args.resize:
+        mode, size = args.resize
+        size = size_regex(size)
+
     supported_exts = set(Image.registered_extensions().keys())
     files_to_convert = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in supported_exts]
 
     tasks = []
     for file in files_to_convert:
         output_file = output_path / (file.stem + "." + output_file_format)
-        tasks.append((file, output_file, args.verbose, args.copyexif, args.size))
+        tasks.append((file, output_file, args.verbose, args.copyexif, size, mode))
 
     with ProcessPoolExecutor() as executor:
-        list(executor.map(parallel, tasks))
+        if args.verbose:
+            list(executor.map(parallel, tasks))
+
+        else:
+            list(tqdm(executor.map(parallel, tasks), total=len(tasks)))
+
 
     end_time = time.time()
     if args.verbose:
@@ -143,8 +182,8 @@ def convert_batch(args):
 
 def parallel(args_tuple):
 
-    input_file, output_file, verbose, exif, size = args_tuple
-    return convert_image(input_file, output_file, verbose, exif, size)
+    input_file, output_file, verbose, exif, size, mode = args_tuple
+    return convert_image(input_file, output_file, verbose, exif, size, mode)
 
 
 def remove_exif(args):
@@ -159,16 +198,19 @@ def remove_exif(args):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     suffix = secrets.token_hex(2)
     output_path = input_dir / f"noexif_{timestamp}_{suffix}_{Path(args.input).name}"
-    convert_image(input_path, output_path, args.verbose, False, args.size)
+    args.copyexif = False
+    mode = None
+    size = None
+    convert_image(input_path, output_path, args.verbose, args.copyexif, size, mode)
 
 
-def size_regex(size):
+def size_regex(resize):
 
     pattern = r"^\d{1,4}[x,]{1}\d{1,4}$"
-    if not re.search(pattern, size):
-        raise argparse.ArgumentTypeError(f"'{size}' is not a valid resolution (e.g. 600x900)")
+    if not re.search(pattern, resize):
+        raise argparse.ArgumentTypeError(f"'{resize}' is not a valid resolution (e.g. 600x900)")
 
-    parts = re.split(r'x|,', size)
+    parts = re.split(r'x|,', resize)
 
     width, height = map(int, parts)
     if height == 0 or width == 0:
