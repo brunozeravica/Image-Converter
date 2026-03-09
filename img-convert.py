@@ -147,6 +147,9 @@ def scrub_exif(args):
     input_path = Path(args.input).resolve()
     input_dir = input_path.parent
 
+    if args.copyexif and args.verbose:
+        print("--copyexif (-c) flag has no functionality in remove-exif mode")
+
     # Generating a random file name so as not to overwrite an existing one
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     suffix = secrets.token_hex(2)
