@@ -20,17 +20,22 @@ def main():
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    file_cmd = sub.add_parser("file", aliases=["F"],help="Convert a single file")
+    file_cmd = sub.add_parser("file", aliases=["F", "f"],help="Convert a single file")
     file_cmd.add_argument("input")
     file_cmd.add_argument("output")
 
     file_cmd.set_defaults(func=convert_single)
 
-    batch_cmd = sub.add_parser("batch", aliases=["B"], help="Batch convert an entire directory")
+    batch_cmd = sub.add_parser("batch", aliases=["B", "b"], help="Batch convert an entire directory")
     batch_cmd.add_argument("input_directory")
     batch_cmd.add_argument("output_format")
 
     batch_cmd.set_defaults(func=convert_batch)
+
+    remove_exif_cmd = sub.add_parser("remove-exif", aliases=["RE", "re"], help="Create a copy of an image without the EXIF data")
+    remove_exif_cmd.add_argument("input")
+
+    remove_exif_cmd.set_defaults(func=scrub_exif)
 
     args = parser.parse_args()
 
@@ -58,7 +63,6 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
         with Image.open(input_file) as img:
             if exif:
                 exif_data = img.getexif()
-
             # Check if the output file format can save an image in the color mode of the input image
             if not file_format_mode_check(output_file_format, img.mode):
                 for mode in ("RGBA", "RGB", "L"):
@@ -71,7 +75,11 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
                 print(f"Unsupported file format: {output_file_format}")
                 return
 
-            img.save(output_file, exif=exif_data)
+            if exif:
+                img.save(output_file, exif=exif_data)
+
+            else:
+                img.save(output_file)
 
     except Exception as e:
         if verbose:
@@ -132,6 +140,18 @@ def parallel(args_tuple):
 
     input_file, output_file, verbose, exif = args_tuple
     return convert_image(input_file, output_file, verbose, exif)
+
+
+def scrub_exif(args):
+
+    input_path = Path(args.input).resolve()
+    input_dir = input_path.parent
+
+    # Generating a random file name so as not to overwrite an existing one
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    suffix = secrets.token_hex(2)
+    output_path = input_dir / f"noexif_{timestamp}_{suffix}_{Path(args.input).name}"
+    convert_image(input_path, output_path, args.verbose, False)
 
 
 def file_format_mode_check(file_format, required_mode):

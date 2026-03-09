@@ -8,6 +8,7 @@ A high-performance, multi-threaded image conversion tool built with Python and P
 * **Intelligent Color Conversion:** Automatically detects and converts color modes (e.g., RGBA to RGB) to ensure compatibility with the target format.
 * **Path Safety:** Built using `pathlib` for robust cross-platform path handling.
 * **Preserving EXIF Data:** EXIF data can be preserved accross conversions with the `--copyexif` or `-c` flag
+* **Scrub EXIF Data mode:** The `remove-exif` or `re` mode makes a copy of the original image with the EXIF data removed
 
 ## Requirements
 * Python 3.x
