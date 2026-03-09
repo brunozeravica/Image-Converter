@@ -35,7 +35,7 @@ def main():
     remove_exif_cmd = sub.add_parser("remove-exif", aliases=["RE", "re"], help="Create a copy of an image without the EXIF data")
     remove_exif_cmd.add_argument("input")
 
-    remove_exif_cmd.set_defaults(func=scrub_exif)
+    remove_exif_cmd.set_defaults(func=remove_exif)
 
     args = parser.parse_args()
 
@@ -142,7 +142,7 @@ def parallel(args_tuple):
     return convert_image(input_file, output_file, verbose, exif)
 
 
-def scrub_exif(args):
+def remove_exif(args):
 
     input_path = Path(args.input).resolve()
     input_dir = input_path.parent
