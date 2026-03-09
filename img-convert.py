@@ -8,6 +8,7 @@ import string
 from concurrent.futures import ProcessPoolExecutor
 import time
 from datetime import datetime
+import re
 
 def main():
 
@@ -17,6 +18,7 @@ def main():
 
     parser.add_argument("--copyexif", "-c", action="store_true", help="Converted images retain the original EXIF data (metadata)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
+    parser.add_argument("--size", "-s", type=size_regex, help="Change the size of the output image (width, height)")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -42,7 +44,7 @@ def main():
     args.func(args)
 
 
-def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool):
+def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool, size: tuple):
 
     try:
         input_file = Path(input_file)
@@ -75,6 +77,9 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
                 print(f"Unsupported file format: {output_file_format}")
                 return
 
+            if size:
+                img = img.resize(size)
+
             if exif:
                 img.save(output_file, exif=exif_data)
 
@@ -96,7 +101,7 @@ def convert_single(args):
     input_dir = input_path.parent
     output_path = input_dir / args.output
 
-    convert_image(input_path, output_path, args.verbose, args.copyexif)
+    convert_image(input_path, output_path, args.verbose, args.copyexif, args.size)
 
 
 def convert_batch(args):
@@ -126,7 +131,7 @@ def convert_batch(args):
     tasks = []
     for file in files_to_convert:
         output_file = output_path / (file.stem + "." + output_file_format)
-        tasks.append((file, output_file, args.verbose, args.copyexif))
+        tasks.append((file, output_file, args.verbose, args.copyexif, args.size))
 
     with ProcessPoolExecutor() as executor:
         list(executor.map(parallel, tasks))
@@ -138,8 +143,8 @@ def convert_batch(args):
 
 def parallel(args_tuple):
 
-    input_file, output_file, verbose, exif = args_tuple
-    return convert_image(input_file, output_file, verbose, exif)
+    input_file, output_file, verbose, exif, size = args_tuple
+    return convert_image(input_file, output_file, verbose, exif, size)
 
 
 def remove_exif(args):
@@ -154,7 +159,22 @@ def remove_exif(args):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     suffix = secrets.token_hex(2)
     output_path = input_dir / f"noexif_{timestamp}_{suffix}_{Path(args.input).name}"
-    convert_image(input_path, output_path, args.verbose, False)
+    convert_image(input_path, output_path, args.verbose, False, args.size)
+
+
+def size_regex(size):
+
+    pattern = r"^\d{1,4}[x,]{1}\d{1,4}$"
+    if not re.search(pattern, size):
+        raise argparse.ArgumentTypeError(f"'{size}' is not a valid resolution (e.g. 600x900)")
+
+    parts = re.split(r'x|,', size)
+
+    width, height = map(int, parts)
+    if height == 0 or width == 0:
+        raise argparse.ArgumentTypeError("Dimensions must be greater than zero.")
+
+    return width, height
 
 
 def file_format_mode_check(file_format, required_mode):
