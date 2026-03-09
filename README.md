@@ -24,3 +24,7 @@ python img-convert.py batch <input_directory> <output_format>
 ```bash
 python img-convert.py file <input_file> <output_file>
 ```
+### Removing EXIF data
+```bash
+python img-convert.py remove-exif <input_file>
+```
