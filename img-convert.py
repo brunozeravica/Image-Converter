@@ -1,22 +1,14 @@
-from PIL import Image, ImageOps
-import sys
-from pathlib import Path
 import argparse
-import io
-import secrets
 from concurrent.futures import ProcessPoolExecutor
-import time
 from datetime import datetime
+import io
+from pathlib import Path
+from PIL import Image, ImageOps
 import re
+import secrets
+import sys
+import time
 from tqdm import tqdm
-
-def add_resize_args(p):
-        p.add_argument(
-            "-r", "--resize",
-            nargs=2,
-            metavar=('MODE', 'SIZE'),
-            help="Resize mode (contain, cover, fit, force) and dimensions (e.g. --resize fit 600x900)"
-        )
 
 def main():
 
@@ -51,6 +43,15 @@ def main():
     args = parser.parse_args()
 
     args.func(args)
+
+
+def add_resize_args(p):
+        p.add_argument(
+            "-r", "--resize",
+            nargs=2,
+            metavar=('MODE', 'SIZE'),
+            help="Resize mode (contain, cover, fit, force) and dimensions (e.g. --resize fit 600x900)"
+        )
 
 
 def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool, size: tuple, mode: str):
