@@ -6,7 +6,7 @@ It supports **single-file conversions**, **batch processing**, optional **EXIF p
 ## Features
 
 * **Batch Conversion**  
-  Convert entire directories of images in one command.
+  Convert entire directories of images in one command, outputs number of failed conversions if there were any.
 
 * **Parallel Processing**  
   Uses `ProcessPoolExecutor` to utilize multiple CPU cores for faster conversion.
