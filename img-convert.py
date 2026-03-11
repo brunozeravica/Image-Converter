@@ -113,7 +113,8 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
 
     if verbose:
         print(f"Successfully converted {input_file} to {output_file}")
-        return True
+        
+    return True
 
 
 def convert_single(args):
