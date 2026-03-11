@@ -130,7 +130,8 @@ def convert_single(args):
         mode, size = args.resize
         size = size_regex(size)
 
-    convert_image(input_path, output_path, args.verbose, args.copyexif, size, mode)
+    if not convert_image(input_path, output_path, args.verbose, args.copyexif, size, mode):
+        print(f"Warning: {input_path} failed to convert")
 
 
 def convert_batch(args):
