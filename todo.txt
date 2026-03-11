@@ -1,0 +1,5 @@
+quality
+recursive batch processing
+dry run
+supporting symlinks
+checking if directory has valid images before spinning up the process pool
