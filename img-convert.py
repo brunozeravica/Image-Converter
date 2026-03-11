@@ -61,11 +61,11 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
         output_file = Path(output_file)
 
     except Exception as e:
-        sys.exit(f"Invalid path, Error: {e}")
+        sys.exit(f"Error: Invalid path: {e}")
 
     if not output_file.suffix:
         print("Invalid file name")
-        return
+        return False
 
     exif_data = None
     # Get the extension of the output file
@@ -73,6 +73,10 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
     if output_file_format == "JPG": output_file_format = "JPEG"
     try:
         with Image.open(input_file) as img:
+
+            if output_file_format not in Image.SAVE.keys():
+                sys.exit(f"Error: Unsupported file format: {output_file_format}")
+
             if exif:
                 exif_data = img.getexif()
             # Check if the output file format can save an image in the color mode of the input image
@@ -82,11 +86,6 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
                         img = img.convert(color_mode)
                         print(f"Forced to convert {input_file.name} to color format {color_mode}")
                         break
-
-            if output_file_format not in Image.SAVE.keys():
-                print(f"Unsupported file format: {output_file_format}")
-                return
-
 
             if size:
                 match mode:
@@ -110,10 +109,11 @@ def convert_image(input_file: Path, output_file: Path, verbose: bool, exif: bool
     except Exception as e:
         if verbose:
             print(f"Skipping {input_file}: {e}")
-        return
+        return False
 
     if verbose:
         print(f"Successfully converted {input_file} to {output_file}")
+        return True
 
 
 def convert_single(args):
@@ -140,7 +140,7 @@ def convert_batch(args):
     input_dir = Path(args.input_directory).resolve()
 
     if not input_dir.is_dir():
-        sys.exit(f"Batch mode requires a directory as input, got: {args.input_directory}")
+        sys.exit(f"Error: Batch mode requires a directory as input, got: {args.input_directory}")
 
     # Generating a random directory name so as not to overwrite an existing one
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -170,15 +170,18 @@ def convert_batch(args):
 
     with ProcessPoolExecutor() as executor:
         if args.verbose:
-            list(executor.map(parallel, tasks))
+            results = list(executor.map(parallel, tasks))
 
         else:
-            list(tqdm(executor.map(parallel, tasks), total=len(tasks)))
+            results = list(tqdm(executor.map(parallel, tasks), total=len(tasks)))
 
+    failed = results.count(False)
+    if failed:
+        print(f"Warning: {failed}/{len(tasks)} files failed to convert")
 
     end_time = time.time()
     if args.verbose:
-        print(f"Time taken: {end_time - start_time:.2f}")
+        print(f"Time taken: {end_time - start_time:.2f} seconds")
 
 
 def parallel(args_tuple):
@@ -209,13 +212,13 @@ def size_regex(resize):
 
     pattern = r"^\d{1,4}[x,]{1}\d{1,4}$"
     if not re.search(pattern, resize):
-        raise argparse.ArgumentTypeError(f"'{resize}' is not a valid resolution (e.g. 600x900)")
+        sys.exit(f"Error: '{resize}' is not a valid resolution (e.g. 600x900)")
 
     parts = re.split(r'x|,', resize)
 
     width, height = map(int, parts)
     if height == 0 or width == 0:
-        raise argparse.ArgumentTypeError("Dimensions must be greater than zero.")
+        sys.exit("Error: Dimensions must be greater than zero.")
 
     return width, height
 
