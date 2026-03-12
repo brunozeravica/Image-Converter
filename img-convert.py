@@ -32,6 +32,7 @@ def main():
     add_resize_args(batch_cmd)
     batch_cmd.add_argument("input_directory")
     batch_cmd.add_argument("output_format")
+    batch_cmd.add_argument("-r", "--recursive", action="store_true", help="Enables recursive conversion")
 
     batch_cmd.set_defaults(func=convert_batch)
 
@@ -46,8 +47,9 @@ def main():
 
 
 def add_resize_args(p):
+
         p.add_argument(
-            "-r", "--resize",
+            "-rs", "--resize",
             nargs=2,
             metavar=('MODE', 'SIZE'),
             help="Resize mode (contain, cover, fit, force) and dimensions (e.g. --resize fit 600x900)"
@@ -121,7 +123,10 @@ def convert_single(args):
 
     input_path = Path(args.input).resolve()
     input_dir = input_path.parent
-    output_path = input_dir / args.output
+    if Path(args.output).parent == Path("."):
+        output_path = input_dir / args.output
+    else:
+        output_path = args.output
 
     mode = None
     size = None
@@ -163,12 +168,23 @@ def convert_batch(args):
         size = size_regex(size)
 
     supported_exts = set(Image.registered_extensions().keys())
-    files_to_convert = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in supported_exts]
+
+    if args.recursive:
+        files_to_convert = [f for f in input_dir.rglob("*") if f.is_file() and f.suffix.lower() in supported_exts]
+    else:
+        files_to_convert = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in supported_exts]
 
     tasks = []
     for file in files_to_convert:
-        output_file = output_path / (file.stem + "." + output_file_format)
+        relative = file.relative_to(input_dir)
+        output_file = output_path / relative.with_suffix("." + output_file_format)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        #output_file = output_path / (file.stem + "." + output_file_format)
         tasks.append((file, output_file, args.verbose, args.copyexif, size, mode))
+
+    if not tasks:
+        print(f"No valid image files found in {input_dir}")
+        return
 
     with ProcessPoolExecutor() as executor:
         if args.verbose:
@@ -211,7 +227,7 @@ def remove_exif(args):
 
 
 def size_regex(resize):
-
+    # Check if the size parameter is a valid dimension
     pattern = r"^\d{1,4}[x,]{1}\d{1,4}$"
     if not re.search(pattern, resize):
         sys.exit(f"Error: '{resize}' is not a valid resolution (e.g. 600x900)")
