@@ -179,7 +179,6 @@ def convert_batch(args):
         relative = file.relative_to(input_dir)
         output_file = output_path / relative.with_suffix("." + output_file_format)
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        #output_file = output_path / (file.stem + "." + output_file_format)
         tasks.append((file, output_file, args.verbose, args.copyexif, size, mode))
 
     if not tasks:
