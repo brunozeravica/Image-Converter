@@ -125,3 +125,5 @@ python img-convert.py file input.png output.jpg -rs fit 800x600
 | Flag | Description |
 |-----|-------------|
 | `-rs`, `--resize` | Resize images during conversion |
+
+This was the final project for Harvard's CS50x course.
